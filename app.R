@@ -31,7 +31,7 @@ ui <- fluidPage(
   fluidRow(
     column(12, p(paste0("Ce simulateur permet de calculer les frais scolaires par enfant en fonction de sa classe, 
     des horaires choisis et des options de vacances. Les prix calculés prennent également en compte les 
-    réductions appliquées pour les fratries ainsi que celles pour les revenus familiaux inférieurs à ", limitFamilial,"€."))),
+    réductions appliquées pour les fratries ainsi que celles pour les revenus familiaux inférieurs à ", limitFamilial,"€. le tarif final ne comprends pas la cantine pour les enfants inscrit en garderie."))),
     column(12, p("Si plusieurs enfants, merci de les entrer par ordre de classe, le 1er enfant étant dans la classe la plus avancée."))
   ),
   
@@ -53,7 +53,7 @@ ui <- fluidPage(
   # Tableau récapitulatif
   fluidRow(
     column(12, h4("Récapitulatif des frais"), tableOutput("summary_table")),
-    column(12, p("* Total à titre indicatif. Validation lors de l'inscription.", style = "font-size: small; color: gray;")),
+    column(12, p("* Total à titre indicatif n'incluant pas le tarif de la cantine. Validation lors de l'inscription.", style = "font-size: small; color: gray;")),
     column(12, p("** Réduction basées sur le revenu des familles sur tarifs élémentaire uniquement. Sur demande et sur justificatifs.", style = "font-size: small; color: gray;"))
   ),
   
