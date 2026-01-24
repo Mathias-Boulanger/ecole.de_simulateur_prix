@@ -23,6 +23,10 @@ association <- 500
 reinscritpion <- list(premiere = 500, normale = 50, majoree = 100)
 extra_fee_young_maternelle <- 75  # Extra fee per month for kids born after 31/12/(school_year-3) in maternelle
 
+# Flag to show/hide inscription costs in the main app
+# Set to TRUE for internal school use to include inscription/reinscription fees
+SHOW_INSCRIPTION_COSTS <- FALSE
+
 reduction.l <- c(no=1, `1`=0.85, `2`=0.75)
 limitFamilial=round(((ecolage[["Élementaire - CP à CM"]]/5)*100)*12, 0)
 
@@ -55,8 +59,8 @@ ui <- fluidPage(
   # Tableaux récapitulatifs
   fluidRow(
     column(12, h4("Récapitulatif mensuel"), tableOutput("monthly_table")),
-    column(12, h4("Frais annuels supplémentaires"), tableOutput("yearly_table")),
-    column(12, p("* Total à titre indicatif n'incluant pas le tarif de la cantine. Validation lors de l'inscription.", style = "font-size: small; color: gray;")),
+    column(12, uiOutput("yearly_table_header")),
+    column(12, p("* Total à titre indicatif n'incluant pas le tarif de la cantine. Validation lors de l'inscription incluant les frais annuels annexes (frais d'inscription ou re-inscription).", style = "font-size: small; color: gray;")),
     column(12, uiOutput("extra_fee_footnote"))
   ),
   
@@ -199,9 +203,14 @@ server <- function(input, output, session) {
       vacation_value <- if (!is.null(current_vacation) && current_vacation != "") current_vacation else
                         if (i <= nrow(child_data()) && child_data()$Vacances[i] != "") child_data()$Vacances[i] else "Non"
       
-      inscription_value <- if (!is.null(current_inscription) && current_inscription != "") current_inscription else
-                           if (i <= nrow(child_data()) && !is.null(child_data()$Inscription[i]) && child_data()$Inscription[i] != "") 
-                             child_data()$Inscription[i] else "premiere"
+      # Inscription value - only used if SHOW_INSCRIPTION_COSTS is TRUE
+      inscription_value <- if (SHOW_INSCRIPTION_COSTS) {
+        if (!is.null(current_inscription) && current_inscription != "") current_inscription else
+          if (i <= nrow(child_data()) && !is.null(child_data()$Inscription[i]) && child_data()$Inscription[i] != "") 
+            child_data()$Inscription[i] else "premiere"
+      } else {
+        "premiere"  # Default value when disabled
+      }
       
       fluidRow(
         column(2, textInput(
@@ -229,16 +238,19 @@ server <- function(input, output, session) {
           paste0("child_vacation_", i), "Vacances",
           choices = c("Oui", "Non"),
           selected = vacation_value
-        )),
-        column(2, selectInput(
-          paste0("child_inscription_", i), "Inscription",
-          choices = list(
-            "1ère inscription" = "premiere",
-            "Re-inscription" = "normale",
-            "Reinscription majorée" = "majoree"
-          ),
-          selected = inscription_value
         ))
+        # Inscription dropdown - hidden when SHOW_INSCRIPTION_COSTS is FALSE
+        # To enable: set SHOW_INSCRIPTION_COSTS <- TRUE at the top of the file
+        # Original code (commented for easy reactivation):
+        # ,column(2, selectInput(
+        #   paste0("child_inscription_", i), "Inscription",
+        #   choices = list(
+        #     "1ère inscription" = "premiere",
+        #     "Re-inscription" = "normale",
+        #     "Reinscription majorée" = "majoree"
+        #   ),
+        #   selected = inscription_value
+        # ))
       )
     })
     
@@ -249,6 +261,13 @@ server <- function(input, output, session) {
       )
     ))
     do.call(tagList, children_ui)
+  })
+  
+  # Render yearly table header conditionally
+  output$yearly_table_header <- renderUI({
+    if (SHOW_INSCRIPTION_COSTS) {
+      h4("Frais annuels supplémentaires")
+    }
   })
   
   # Warning for age restrictions
@@ -372,14 +391,19 @@ server <- function(input, output, session) {
   
   # Conserver les données existantes et calculer les totaux
   observe({
-    # First, collect all children data with birth dates
-    children_list <- lapply(1:child_count(), function(i) {
-      classe <- input[[paste0("child_class_", i)]]
-      horaire <- input[[paste0("child_time_", i)]]
-      vacances <- input[[paste0("child_vacation_", i)]] == "Oui"
-      birth_date <- input[[paste0("child_birthdate_", i)]]
-      inscription_type <- input[[paste0("child_inscription_", i)]]
-      name <- input[[paste0("child_name_", i)]]
+      # First, collect all children data with birth dates
+      children_list <- lapply(1:child_count(), function(i) {
+        classe <- input[[paste0("child_class_", i)]]
+        horaire <- input[[paste0("child_time_", i)]]
+        vacances <- input[[paste0("child_vacation_", i)]] == "Oui"
+        birth_date <- input[[paste0("child_birthdate_", i)]]
+        # Get inscription type only if SHOW_INSCRIPTION_COSTS is enabled
+        inscription_type <- if (SHOW_INSCRIPTION_COSTS) {
+          input[[paste0("child_inscription_", i)]]
+        } else {
+          NULL
+        }
+        name <- input[[paste0("child_name_", i)]]
       
       if (!is.null(classe) && classe != "" && !is.null(horaire)) {
         # Parse birth date
@@ -483,10 +507,19 @@ server <- function(input, output, session) {
         }
         
         # Calculate inscription cost
+        # Set to 0 when SHOW_INSCRIPTION_COSTS is FALSE (for public app)
+        # To enable: set SHOW_INSCRIPTION_COSTS <- TRUE at the top of the file
         inscription_cost <- 0
-        if (!is.null(inscription_type) && inscription_type != "") {
-          inscription_cost <- reinscritpion[[inscription_type]] %||% reinscritpion$premiere
+        if (SHOW_INSCRIPTION_COSTS) {
+          if (!is.null(inscription_type) && inscription_type != "") {
+            inscription_cost <- reinscritpion[[inscription_type]] %||% reinscritpion$premiere
+          }
         }
+        # Original logic (commented for easy reactivation):
+        # inscription_cost <- 0
+        # if (!is.null(inscription_type) && inscription_type != "") {
+        #   inscription_cost <- reinscritpion[[inscription_type]] %||% reinscritpion$premiere
+        # }
         
         # Calcul total
         total <- prix_classe + prix_horaire + inscription_cost
@@ -525,13 +558,33 @@ server <- function(input, output, session) {
   
   # Réinitialiser les données
   observeEvent(input$reset, {
+    # Reset child count
     child_count(1)
-      child_data(data.frame(
-        Nom = character(), Classe = character(), Horaire = character(),
-        Vacances = character(), Inscription = character(), Écolage = numeric(), 
-        Garderie = numeric(), InscriptionCost = numeric(),
-        HasExtraFee = logical(), Total = numeric(), stringsAsFactors = FALSE
-      ))
+    
+    # Clear all child input fields
+    for (i in 1:5) {  # Reset up to 5 children (max allowed)
+      updateTextInput(session, paste0("child_name_", i), value = "")
+      updateDateInput(session, paste0("child_birthdate_", i), 
+                     value = as.Date(paste0(school_year - 3, "-01-01")))
+      updateSelectInput(session, paste0("child_class_", i), selected = "")
+      updateSelectInput(session, paste0("child_time_", i), selected = "13h10")
+      updateSelectInput(session, paste0("child_vacation_", i), selected = "Non")
+      if (SHOW_INSCRIPTION_COSTS) {
+        updateSelectInput(session, paste0("child_inscription_", i), selected = "premiere")
+      }
+    }
+    
+    # Reset income checkbox and input
+    updateCheckboxInput(session, "low_income", value = FALSE)
+    updateNumericInput(session, "family_income", value = 0)
+    
+    # Clear child data
+    child_data(data.frame(
+      Nom = character(), Classe = character(), Horaire = character(),
+      Vacances = character(), Inscription = character(), Écolage = numeric(), 
+      Garderie = numeric(), InscriptionCost = numeric(),
+      HasExtraFee = logical(), Total = numeric(), stringsAsFactors = FALSE
+    ))
   })
   
   # Afficher le tableau récapitulatif mensuel (Écolage et Garderie)
@@ -576,44 +629,81 @@ server <- function(input, output, session) {
     }
   })
   
-  # Afficher le tableau récapitulatif annuel (Écolage × 12, Garderie × 12 + Inscription)
+  # Afficher le tableau récapitulatif annuel (Écolage × 12, Garderie × 12 [+ Inscription])
+  # Only rendered when SHOW_INSCRIPTION_COSTS is TRUE
   output$yearly_table <- renderTable({
+    # Return NULL if inscription costs are disabled
+    if (!SHOW_INSCRIPTION_COSTS) {
+      return(NULL)
+    }
+    
     summary <- child_data()
     if (nrow(summary) > 0) {
-      # Yearly table: Écolage × 12, Garderie × 12, plus inscription fees
+      # Yearly table: Écolage × 12, Garderie × 12, [plus inscription fees if enabled]
       # Add *** to ecolage for kids with extra fee
       ecolage_yearly_display <- ifelse(
         summary$HasExtraFee,
         paste0(round(summary$Écolage * 12, 0), " €***"),
         paste0(round(summary$Écolage * 12, 0), " €")
       )
-      yearly_summary <- data.frame(
-        Nom = summary$Nom,
-        Classe = summary$Classe,
-        Horaire = summary$Horaire,
-        Vacances = summary$Vacances,
-        Écolage = ecolage_yearly_display,
-        Garderie = paste0(round(summary$Garderie * 12, 0), " €"),
-        Inscription = paste0(round(summary$InscriptionCost, 0), " €"),
-        `Total annuel` = paste0(round(summary$Écolage * 12 + summary$Garderie * 12 + summary$InscriptionCost, 0), " €"),
-        stringsAsFactors = FALSE
-      )
       
-      # Calculate yearly totals
-      total_ecolage_yearly <- round(sum(summary$Écolage, na.rm = TRUE) * 12, 0)
-      total_garderie_yearly <- round(sum(summary$Garderie, na.rm = TRUE) * 12, 0)
-      total_inscription <- round(sum(summary$InscriptionCost, na.rm = TRUE), 0)
-      total_yearly <- total_ecolage_yearly + total_garderie_yearly + total_inscription
+      # Build yearly summary - conditionally include inscription column
+      if (SHOW_INSCRIPTION_COSTS) {
+        yearly_summary <- data.frame(
+          Nom = summary$Nom,
+          Classe = summary$Classe,
+          Horaire = summary$Horaire,
+          Vacances = summary$Vacances,
+          Écolage = ecolage_yearly_display,
+          Garderie = paste0(round(summary$Garderie * 12, 0), " €"),
+          Inscription = paste0(round(summary$InscriptionCost, 0), " €"),
+          `Total annuel` = paste0(round(summary$Écolage * 12 + summary$Garderie * 12 + summary$InscriptionCost, 0), " €"),
+          stringsAsFactors = FALSE
+        )
+        
+        # Calculate yearly totals
+        total_ecolage_yearly <- round(sum(summary$Écolage, na.rm = TRUE) * 12, 0)
+        total_garderie_yearly <- round(sum(summary$Garderie, na.rm = TRUE) * 12, 0)
+        total_inscription <- round(sum(summary$InscriptionCost, na.rm = TRUE), 0)
+        total_yearly <- total_ecolage_yearly + total_garderie_yearly + total_inscription
+        
+        # Add total row
+        total_row <- data.frame(
+          Nom = "Total annuel", Classe = "", Horaire = "", Vacances = "",
+          Écolage = paste0(total_ecolage_yearly, " €"),
+          Garderie = paste0(total_garderie_yearly, " €"),
+          Inscription = paste0(total_inscription, " €"),
+          `Total annuel` = paste0(total_yearly, " €*"),
+          stringsAsFactors = FALSE
+        )
+      } else {
+        # Without inscription costs
+        yearly_summary <- data.frame(
+          Nom = summary$Nom,
+          Classe = summary$Classe,
+          Horaire = summary$Horaire,
+          Vacances = summary$Vacances,
+          Écolage = ecolage_yearly_display,
+          Garderie = paste0(round(summary$Garderie * 12, 0), " €"),
+          `Total annuel` = paste0(round(summary$Écolage * 12 + summary$Garderie * 12, 0), " €"),
+          stringsAsFactors = FALSE
+        )
+        
+        # Calculate yearly totals (without inscription)
+        total_ecolage_yearly <- round(sum(summary$Écolage, na.rm = TRUE) * 12, 0)
+        total_garderie_yearly <- round(sum(summary$Garderie, na.rm = TRUE) * 12, 0)
+        total_yearly <- total_ecolage_yearly + total_garderie_yearly
+        
+        # Add total row
+        total_row <- data.frame(
+          Nom = "Total annuel", Classe = "", Horaire = "", Vacances = "",
+          Écolage = paste0(total_ecolage_yearly, " €"),
+          Garderie = paste0(total_garderie_yearly, " €"),
+          `Total annuel` = paste0(total_yearly, " €*"),
+          stringsAsFactors = FALSE
+        )
+      }
       
-      # Add total row
-      total_row <- data.frame(
-        Nom = "Total annuel", Classe = "", Horaire = "", Vacances = "",
-        Écolage = paste0(total_ecolage_yearly, " €"),
-        Garderie = paste0(total_garderie_yearly, " €"),
-        Inscription = paste0(total_inscription, " €"),
-        `Total annuel` = paste0(total_yearly, " €*"),
-        stringsAsFactors = FALSE
-      )
       yearly_summary <- rbind(yearly_summary, total_row)
       yearly_summary
     } else {
