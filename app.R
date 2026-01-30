@@ -337,6 +337,12 @@ server <- function(input, output, session) {
       
       vacation_value <- if (!is.null(current_vacation) && current_vacation != "") current_vacation else
                         if (i <= nrow(child_data()) && child_data()$Vacances[i] != "") child_data()$Vacances[i] else "Non"  # value stays "Oui"/"Non"
+
+      vacation_choices <- setNames(c("Oui", "Non"), c(tr()$vacation_yes, tr()$vacation_no))
+      if (!is.null(time_value) && time_value == "13h10") {
+        vacation_value <- "Non"
+        vacation_choices <- setNames("Non", tr()$vacation_no)
+      }
       
       # Inscription value - only used if SHOW_INSCRIPTION_COSTS is TRUE
       inscription_value <- if (SHOW_INSCRIPTION_COSTS) {
@@ -371,7 +377,7 @@ server <- function(input, output, session) {
         )),
         column(2, selectInput(
           paste0("child_vacation_", i), tr()$vacation,
-          choices = setNames(c("Oui", "Non"), c(tr()$vacation_yes, tr()$vacation_no)),
+          choices = vacation_choices,
           selected = vacation_value
         ))
         # Inscription dropdown - hidden when SHOW_INSCRIPTION_COSTS is FALSE
