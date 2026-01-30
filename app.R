@@ -12,11 +12,11 @@ garderie <- list(
   'Élementaire - CP à CM' = data.frame(
     norm = c(0, 127, 196, 281, 380), vac = c(0, 196, 275, 372, 484),
     reduc = c(0, 127, 196, 256, 330), reduc_vac = c(0, 196, 275, 338, 421),
-    row.names = c("13h10", "15h00 - mini", "16h00 - midi", "17h00 - midi17", "18h00 - maxi")),
+    row.names = c("13h10", "15h00", "16h00", "17h00", "18h00")),
   'Maternelle - de 3 à 6 ans' = data.frame(
     norm = c(0, 103, 159, 219, 280), vac = c(0, 154, 217, 284, 353),
     reduc = c(0, 103, 159, 219, 280), reduc_vac = c(0, 154, 217, 284, 353),
-    row.names = c("13h10", "15h00 - mini", "16h00 - midi", "17h00 - midi17", "18h00 - maxi"))
+    row.names = c("13h10", "15h00", "16h00", "17h00", "18h00"))
 )
 
 association <- 500
@@ -76,7 +76,7 @@ i18n <- list(
     age_warn_elementary = paste0("***L'enfant ", "%s", " doit avoir 6 ans avant le 31/12/", school_year, " pour être en Élémentaire."),
     age_warn_maternelle_old = paste0("***L'enfant ", "%s", " a plus de 8 ans et ne peut pas être en Maternelle."),
     age_warn_maternelle_young = paste0("***L'enfant ", "%s", " doit avoir 2 ans avant le 01/07/", school_year + 1, " pour être en Maternelle."),
-    age_warn_horaire = "***Les horaires midi17 et maxi tarif sont disponibles uniquement pour les enfants de plus de 3 ans.",
+    age_warn_horaire = "***Les horaires 17h et 18h tarif sont disponibles uniquement pour les enfants de plus de 3 ans.",
     age_warn_birthdate = "***Veuillez entrer la date de naissance pour vérifier l'âge requis."
   ),
   de = list(
@@ -119,7 +119,7 @@ i18n <- list(
     age_warn_elementary = paste0("***Kind ", "%s", " muss vor dem 31.12.", school_year, " 6 Jahre alt sein für die Elementarstufe."),
     age_warn_maternelle_old = paste0("***Kind ", "%s", " ist älter als 8 Jahre und kann nicht den Kindergarten besuchen."),
     age_warn_maternelle_young = paste0("***Kind ", "%s", " muss vor dem 01.07.", school_year + 1, " 2 Jahre alt sein für den Kindergarten."),
-    age_warn_horaire = "***Die Zeiten midi17 und maxi sind nur für Kinder über 3 Jahre verfügbar.",
+    age_warn_horaire = "***Die Zeiten 17 Uhr und 18 Uhr sind nur für Kinder über 3 Jahre verfügbar.",
     age_warn_birthdate = "***Bitte Geburtsdatum angeben, um das erforderliche Alter zu prüfen."
   )
 )
@@ -287,13 +287,13 @@ server <- function(input, output, session) {
       )
 
       # Filter horaire choices based on age
-      horaire_choices <- c("13h10", "15h00 - mini", "16h00 - midi")
+      horaire_choices <- c("13h10", "15h00", "16h00")
       if (is_older_than_3) {
-        horaire_choices <- c(horaire_choices, "17h00 - midi17", "18h00 - maxi")
+        horaire_choices <- c(horaire_choices, "17h00", "18h00")
       }
 
       horaire_label <- tr()$time
-      if (!is.null(horaire) && (horaire == "17h00 - midi17" || horaire == "18h00 - maxi") && !is_older_than_3) {
+      if (!is.null(horaire) && (horaire == "17h00" || horaire == "18h00") && !is_older_than_3) {
         horaire_label <- paste0(tr()$time, " ***")
       }
 
@@ -327,7 +327,6 @@ server <- function(input, output, session) {
         if (!is.null(current_time) && current_time %in% horaire_choices) {
           current_time
         } else if (!is.null(current_time) && current_time != "") {
-          # If current time is not in choices (e.g., midi17 for young child), use default
           if ("13h10" %in% horaire_choices) "13h10" else horaire_choices[1]
         } else if (i <= nrow(child_data()) && child_data()$Horaire[i] %in% horaire_choices) {
           child_data()$Horaire[i]
@@ -442,7 +441,7 @@ server <- function(input, output, session) {
               }
             }
           }
-          if (!is.null(horaire) && (horaire == "17h00 - midi17" || horaire == "18h00 - maxi")) {
+          if (!is.null(horaire) && (horaire == "17h00" || horaire == "18h00")) {
             age_3_cutoff <- as.Date(paste0(school_year - 3, "-09-01"))
             if (birth_date_obj >= age_3_cutoff) {
               warnings <- c(warnings, tr()$age_warn_horaire)
@@ -450,7 +449,7 @@ server <- function(input, output, session) {
           }
         }
       } else if (!is.null(classe) && classe != "" && !is.null(horaire) &&
-                 (horaire == "17h00 - midi17" || horaire == "18h00 - maxi")) {
+                 (horaire == "17h00" || horaire == "18h00")) {
         warnings <- c(warnings, tr()$age_warn_birthdate)
       }
     }
